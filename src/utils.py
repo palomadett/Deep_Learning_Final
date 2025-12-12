@@ -1,4 +1,33 @@
+#Needed Constants--------------------------------------------------------------------------------------------------------
+-
 
+# Signal Paramters
+fc            = 3.5e6  #carrier frequency
+sr            = 10e6 #sample rate (Hz)
+num_pulses    = 5 #pulses per train
+PRI           = .12e-3 #pulse repetition interval (sec)
+pulse_len     = 0.1e-3 #single pulse length (sec)
+num_samples = PRI * num_pulses * sr #number of samples per pulse train
+v_peak_range = (1e-3, 8e-3) # amplitude of pulse in volts
+snr_range     = (1, 3) #random SNR range for noisy signals
+c = 1500 # Speed of Sound in water = 1500 m/s
+
+V_max = 5 #Max speed of vehicle, 5 m/s
+f_d_max = (fc*((2*V_max / c)+1))-fc #Max doppler frequency shift depending on the max speed of the vehicle
+doppler_range = (-f_d_max, f_d_max)#Doppler shift range (Hz)
+
+V_peak =.5e-3
+# Spike frequencies (PCB NUM)
+SPIKE_FREQ_POOL = np.linspace(3e6, 10e6, 200)
+# Spike amplitudes (0.1–50% of pulse)
+SPIKE_AMP_POOL = np.linspace(0.1*V_peak, .9*V_peak, 2000)
+
+# Spur frequencies (clock / SMPS artifacts)
+SPUR_FREQ_POOL = np.linspace(2e6, 4e6, 200)
+
+# Spur amplitudes (0.1–5% of pulse)
+SPUR_AMP_POOL = np.linspace(0.001*V_peak, .9*V_peak, 100)
+#--------------------------------------------------------------------------------------------------------------------------
 def generate_clean_pulse_train(
     fs=sr,
     PRI=PRI,
