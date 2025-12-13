@@ -12,7 +12,7 @@ import os
 # --------------------------
 device = "cpu"
 model = UNet1D_DenoiseOnly()
-model_path = "/home/palomad1/Desktop/Python/School/Deep Learning/Final Project/my_model.pth"
+model_path = "/demo/my_model.pth"
 
 # Load the model onto the device
 model.load_state_dict(torch.load(model_path, map_location=device))
