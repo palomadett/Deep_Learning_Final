@@ -15,24 +15,32 @@ This repository contains only the neural network model, training code, and demos
 ```bash
 git clone <repo-url>
 cd <repo-directory>
+```
 
 2. Create a Python virtual environment:
+```
 python -m venv venv
 source venv/bin/activate   # Linux/macOS
 venv\Scripts\activate      # Windows
+```
 
 3. Install dependencies
+```
 pip install -r requirements.txt
+```
 
 4. Create folders for outputs and checkpoints:
+```
 mkdir -p checkpoints results demo
+```
 
-How to Run
-
+5. How to Run
+```
 Run the demo script:
 python demo/demo.py
+```
 
-he demo will:
+The demo will:
 
 Generate or load noisy pulse train data.
 
@@ -42,5 +50,3 @@ Save figures in the results/ folder.
 
 Save model checkpoints in the checkpoints/ folder.\
 
-torch.save(model.state_dict(), "checkpoints/unet_epoch10.pt")
-plt.savefig("results/example.png")
