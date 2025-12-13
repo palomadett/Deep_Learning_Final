@@ -1,9 +1,14 @@
 Prepared by: Paloma Dettloff, University of Washington Applied Physics Laboratory
 Contact: palomad1@uw.edu
 Project Overview
-This project implements a small, low-power acoustic velocity sensor designed for Autonomous Underwater Vehicles (AUVs), particularly gliders. The goal is to measure through-water velocity using Doppler-based backscatter from water particles rather than relying on the ocean floor, enabling accurate velocity measurements even in deep water or under extreme pitch/roll conditions.
-The core of the project is a 1D UNet neural network denoiser trained to extract velocity information from noisy acoustic pulse returns.
-Setup Instructions
+## Project Overview
+
+This repository focuses on a 1D UNet neural network for denoising acoustic pulse returns. The network is trained to suppress noise and artifacts in Doppler-based acoustic signals, improving the extraction of velocity information from noisy measurements.
+
+The motivation for this work comes from the development of a small, low-power acoustic velocity sensor for Autonomous Underwater Vehicles (AUVs), particularly gliders. In that application, through-water velocity is estimated using Doppler backscatter from water particles rather than reflections from the ocean floor. Accurate signal denoising is critical for making reliable velocity estimates under low SNR conditions, long pulse repetition intervals, and varying vehicle orientation.
+
+This repository contains only the neural network model, training code, and demos.
+
 
 1. Clone the repository:
 
