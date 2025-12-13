@@ -46,7 +46,4 @@ Generate or load noisy pulse train data.
 
 Apply the UNet1D denoiser.
 
-Save figures in the results/ folder.
-
-Save model checkpoints in the checkpoints/ folder.\
-
+Save figures in the results/ folder
