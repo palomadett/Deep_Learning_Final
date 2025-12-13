@@ -3,3 +3,5 @@ matplotlib
 seaborn
 scipy
 torch
+scipy 
+os 
