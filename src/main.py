@@ -138,6 +138,24 @@ for epoch in range(num_epochs):
 
     print(f"Epoch {epoch+1:3d}  Train: {train_loss:.4f}  Val: {val_loss:.4f}")
 
+    # ------------------- SAVE CHECKPOINT -------------------
+    checkpoint = {
+        "epoch": epoch + 1,
+        "model_state_dict": model.state_dict(),
+        "optimizer_state_dict": optimizer.state_dict(),
+        "train_loss": train_loss,
+        "val_loss": val_loss,
+    }
+
+    torch.save(checkpoint, "checkpoints/unet_latest.pt")
+
+    #Save best model (by validation loss)
+    if val_loss < best_val_loss:
+        best_val_loss = val_loss
+        torch.save(checkpoint, "checkpoints/unet_best.pt")
+        print("  ✓ Saved new best model")
+
+
 # ------------------- PLOT TRAINING/VALIDATION LOSS -------------------
 plt.figure(figsize=(10,6))
 plt.plot(train_losses, label='Training Loss', color='blue', linewidth=2)
