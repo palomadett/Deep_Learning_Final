@@ -1,1 +1,131 @@
+import torch
+from torch.utils.data import DataLoader
+import matplotlib.pyplot as plt
+import numpy as np 
+import matplotlib.pyplot as plt 
+from src/model import UNet1D_DenoiseOnly  
+from src/utils import CachedPulseDataset, sr, fc, doppler_range, c, compute_fft  # your constants & functions
+import os 
+
+
+# Load pre-trained model
+# --------------------------
+device = "cpu"
+model = UNet1D_DenoiseOnly()
+model_path = "/home/palomad1/Desktop/Python/School/Deep Learning/Final Project/my_model.pth"
+
+# Load the model onto the device
+model.load_state_dict(torch.load(model_path, map_location=device))
+model.to(device)
+model.eval()
+
+
+
+# Generate demo dataset
+# --------------------------
+demo_dataset = CachedPulseDataset(N=300, regenerate=True)  # 300 test samples
+demo_loader = DataLoader(demo_dataset, batch_size=16, shuffle=False)
+
+# Evaluate / plot
+# --------------------------
+def evaluate_demo(loader, fs=sr, top_k=3):
+    all_errors_noisy = []
+    all_errors_denoised = []
+    all_data = []
+
+    with torch.no_grad():
+        for batch_noisy, batch_clean, batch_fd in loader:
+            batch_noisy = batch_noisy.to(device)
+            batch_pred = model(batch_noisy).cpu()
+            batch_noisy = batch_noisy.cpu()
+            batch_clean = batch_clean.cpu()
+            batch_fd = batch_fd.cpu()
+
+            for i in range(batch_noisy.size(0)):
+                noisy = batch_noisy[i].numpy()
+                clean = batch_clean[i].numpy()
+                denoised = batch_pred[i].numpy()
+
+                noisy_c = noisy[0] + 1j*noisy[1]
+                clean_c = clean[0] + 1j*clean[1]
+                denoised_c = denoised[0] + 1j*denoised[1]
+
+                noisy_c *= loader.dataset.scale_factor
+                clean_c *= loader.dataset.scale_factor
+                denoised_c *= loader.dataset.scale_factor
+                denoised_c -= np.mean(denoised_c)
+
+                # FFT
+                CLEAN_MAG, FREQ = compute_fft(clean_c, fs, window=True, zero_pad_factor=8, doppler_range=doppler_range)
+                NOISY_MAG, _ = compute_fft(noisy_c, fs, window=True, zero_pad_factor=8, doppler_range=doppler_range)
+                DENOISED_MAG, _ = compute_fft(denoised_c, fs, window=True, zero_pad_factor=8, doppler_range=doppler_range)
+
+                f_peak_noisy = FREQ[np.argmax(NOISY_MAG)]
+                f_peak_denoised = FREQ[np.argmax(DENOISED_MAG)]
+
+                f_shift_true_hz = batch_fd[i].item() * 1000.0
+                v_true = f_shift_true_hz * c / (2 * fc)
+                v_fft_noisy = f_peak_noisy * c / (2 * fc)
+                v_fft_denoised = f_peak_denoised * c / (2 * fc)
+
+                # Errors
+                all_errors_noisy.append((v_fft_noisy - v_true)**2)
+                all_errors_denoised.append((v_fft_denoised - v_true)**2)
+
+                all_data.append({
+                    'v_true': v_true,
+                    'v_fft_noisy': v_fft_noisy,
+                    'v_fft_denoised': v_fft_denoised,
+                    'clean_c': clean_c,
+                    'noisy_c': noisy_c,
+                    'denoised_c': denoised_c,
+                    'FREQ': FREQ,
+                    'DENOISED_MAG': DENOISED_MAG
+                })
+
+    rmse_noisy = np.sqrt(np.mean(all_errors_noisy))
+    rmse_denoised = np.sqrt(np.mean(all_errors_denoised))
+    print(f"RMSE Noisy: {rmse_noisy:.6f} m/s")
+    print(f"RMSE Denoised: {rmse_denoised:.6f} m/s")
+
+    # Plot top_k best denoised examples
+    best_indices = np.argsort(all_errors_denoised)[:top_k]
+    for idx in best_indices:
+        data = all_data[idx]
+        t = np.arange(len(data['clean_c'])) / fs
+
+        fig, axs = plt.subplots(2, 2, figsize=(18, 10.5))
+        # Clean
+        axs[0,0].plot(t, data['clean_c'].real, label='Real', linewidth=2)
+        axs[0,0].plot(t, data['clean_c'].imag, label='Imag', alpha=0.7, linewidth=2)
+        axs[0,0].set_title("Clean")
+        axs[0,0].legend()
+        axs[0,0].grid(True, alpha=0.3)
+
+        # Noisy + predicted velocity
+        axs[0,1].plot(t, data['noisy_c'].real, color='red', label='Real')
+        axs[0,1].plot(t, data['noisy_c'].imag, color='orange', label='Imag', alpha=0.7)
+        axs[0,1].set_title(f"Noisy → Predicted: {data['v_fft_noisy']:.3f} m/s")
+        axs[0,1].legend()
+        axs[0,1].grid(True, alpha=0.3)
+
+        # Denoised
+        axs[1,0].plot(t, data['denoised_c'].real, color='green', label='Real')
+        axs[1,0].plot(t, data['denoised_c'].imag, color='lime', label='Imag', alpha=0.8)
+        axs[1,0].set_title(f"Denoised → {data['v_fft_denoised']:.3f} m/s")
+        axs[1,0].legend()
+        axs[1,0].grid(True, alpha=0.3)
+
+        # FFT of denoised
+        axs[1,1].plot(data['FREQ']/1e3, data['DENOISED_MAG'], color='green')
+        axs[1,1].axvline(data['v_fft_denoised']*2*fc/c/1e3, color='orange', linestyle='--')
+        axs[1,1].set_title("FFT Denoised")
+        axs[1,1].grid(True, alpha=0.3)
+
+        plt.tight_layout()
+        plt.show()
+
+
+# Run demo
+evaluate_demo(demo_loader, fs=sr, top_k=3)
 
