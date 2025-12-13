@@ -87,6 +87,11 @@ def evaluate_demo(loader, fs=sr, top_k=3):
     rmse_denoised = np.sqrt(np.mean(all_errors_denoised))
     print(f"RMSE Noisy: {rmse_noisy:.6f} m/s")
     print(f"RMSE Denoised: {rmse_denoised:.6f} m/s")
+    ion in your evaluate_demo() function:
+
+    #put the results in the results folder 
+    output_dir = "results"
+    os.makedirs(output_dir, exist_ok=True)
 
     # Plot top_k best denoised examples
     best_indices = np.argsort(all_errors_denoised)[:top_k]
@@ -128,4 +133,3 @@ def evaluate_demo(loader, fs=sr, top_k=3):
 
 # Run demo
 evaluate_demo(demo_loader, fs=sr, top_k=3)
-
