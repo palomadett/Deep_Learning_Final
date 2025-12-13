@@ -1,11 +1,19 @@
-#Needed Constants--------------------------------------------------------------------------------------------------------
--
+import numpy as np 
+import matplotlib.pyplot as plt 
+import torch 
+from torch.utils.data import Dataset, DataLoader
+import os 
+from scipy.signal import butter, lfilter
+
+
+
 
 # Signal Paramters
 fc            = 3.5e6  #carrier frequency
 sr            = 10e6 #sample rate (Hz)
 num_pulses    = 5 #pulses per train
 PRI           = .12e-3 #pulse repetition interval (sec)
+# PRI= .1e-3
 pulse_len     = 0.1e-3 #single pulse length (sec)
 num_samples = PRI * num_pulses * sr #number of samples per pulse train
 v_peak_range = (1e-3, 8e-3) # amplitude of pulse in volts
@@ -27,7 +35,8 @@ SPUR_FREQ_POOL = np.linspace(2e6, 4e6, 200)
 
 # Spur amplitudes (0.1–5% of pulse)
 SPUR_AMP_POOL = np.linspace(0.001*V_peak, .9*V_peak, 100)
-#--------------------------------------------------------------------------------------------------------------------------
+
+
 def generate_clean_pulse_train(
     fs=sr,
     PRI=PRI,
@@ -148,6 +157,80 @@ def add_scattering_and_noise(
   #---------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 
+
+# ------------------- FIXED CACHED DATASET WITH GLOBAL NORMALIZATION -------------------
+class CachedPulseDataset(Dataset):
+    def __init__(self, N=20000, cache_file="cached_pulses.pt", regenerate=False):
+        self.cache_file = cache_file
+
+        if os.path.exists(cache_file) and not regenerate:
+            print(f"Loading cached dataset from {cache_file}...")
+            data = torch.load(cache_file, map_location='cpu')
+            self.noisy = data['noisy']
+            self.clean = data['clean']
+            self.fd    = data['fd']
+            self.scale_factor = data['scale_factor']
+        else:
+            print(f"Generating {N} samples with GLOBAL normalization...")
+            noisy_list, clean_list, fd_list = [], [], []
+
+            # First pass: find global max amplitude
+            max_amp = 0.0
+            print("Finding global max amplitude...")
+            for i in range(N):
+                if i % 5000 == 0: print(f"  {i}/{N}")
+                clean, fd_hz = generate_clean_pulse_train()
+                t = np.arange(len(clean)) / sr
+                clean_bb = clean * np.exp(-2j * np.pi * fc * t)
+                amp = np.max(np.abs(clean_bb))
+                if amp > max_amp:
+                    max_amp = amp
+
+            self.scale_factor = max_amp  # ← GLOBAL SCALE
+            print(f"Global scale factor: {max_amp:.6f}")
+
+            # Second pass: generate and normalize
+            for i in range(N):
+                if i % 2000 == 0: print(f"  → {i}/{N}")
+                clean, fd_hz = generate_clean_pulse_train()
+                noisy = add_scattering_and_noise(clean, snr_db=float(np.random.uniform(0, 8)))
+
+                t = np.arange(len(clean)) / sr
+                clean_bb = clean * np.exp(-2j * np.pi * fc * t)
+                noisy_bb = noisy * np.exp(-2j * np.pi * fc * t)
+
+                # GLOBAL NORMALIZATION
+                clean_bb /= (self.scale_factor + 1e-12)
+                noisy_bb /= (self.scale_factor + 1e-12)
+
+                clean_tensor = torch.tensor(np.stack([clean_bb.real, clean_bb.imag]), dtype=torch.float32)
+                noisy_tensor = torch.tensor(np.stack([noisy_bb.real, noisy_bb.imag]), dtype=torch.float32)
+                fd_tensor = torch.tensor(fd_hz / 1000.0, dtype=torch.float32)
+
+                noisy_list.append(noisy_tensor)
+                clean_list.append(clean_tensor)
+                fd_list.append(fd_tensor)
+
+            self.noisy = torch.stack(noisy_list)
+            self.clean = torch.stack(clean_list)
+            self.fd    = torch.stack(fd_list)
+
+            torch.save({
+                'noisy': self.noisy,
+                'clean': self.clean,
+                'fd': self.fd,
+                'scale_factor': self.scale_factor
+            }, cache_file)
+            print(f"Saved with global scaling!")
+
+        print(f"Dataset ready: {len(self)} samples (scale: {self.scale_factor:.6f})")
+
+    def __len__(self): return len(self.noisy)
+    def __getitem__(self, i): return self.noisy[i], self.clean[i], self.fd[i]
+
+#-----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
 def compute_fft(signal, fs, window=True, zero_pad_factor=4, doppler_range=None):
     """
     Compute FFT of a complex signal with optional windowing, zero-padding,
@@ -263,3 +346,74 @@ def plot_noisy_clean_with_fft(loader, fs=sr, num_examples=3):
         plt.tight_layout()
         plt.show()
         print(v_clean, v_noisy, v_true)
+
+
+
+class CachedPulseDataset(Dataset):
+    def __init__(self, N=16000, cache_file="cached_pulses.pt", regenerate=False):
+        self.cache_file = cache_file
+
+        if os.path.exists(cache_file) and not regenerate:
+            print(f"Loading cached dataset from {cache_file}...")
+            data = torch.load(cache_file, map_location='cpu')
+            self.noisy = data['noisy']
+            self.clean = data['clean']
+            self.fd    = data['fd']
+            self.scale_factor = data['scale_factor']
+        else:
+            print(f"Generating {N} samples with GLOBAL normalization...")
+            noisy_list, clean_list, fd_list = [], [], []
+
+            # First pass: find global max amplitude
+            max_amp = 0.0
+            print("Finding global max amplitude...")
+            for i in range(N):
+                if i % 5000 == 0: print(f"  {i}/{N}")
+                clean, fd_hz = generate_clean_pulse_train()
+                t = np.arange(len(clean)) / sr
+                clean_bb = clean * np.exp(-2j * np.pi * fc * t)
+                amp = np.max(np.abs(clean_bb))
+                if amp > max_amp:
+                    max_amp = amp
+
+            self.scale_factor = max_amp  # ← GLOBAL SCALE
+            print(f"Global scale factor: {max_amp:.6f}")
+
+            # Second pass: generate and normalize
+            for i in range(N):
+                if i % 2000 == 0: print(f"  → {i}/{N}")
+                clean, fd_hz = generate_clean_pulse_train()
+                noisy = add_scattering_and_noise(clean, snr_db=float(np.random.uniform(0, 8)))
+
+                t = np.arange(len(clean)) / sr
+                clean_bb = clean * np.exp(-2j * np.pi * fc * t)
+                noisy_bb = noisy * np.exp(-2j * np.pi * fc * t)
+
+                # GLOBAL NORMALIZATION
+                clean_bb /= (self.scale_factor + 1e-12)
+                noisy_bb /= (self.scale_factor + 1e-12)
+
+                clean_tensor = torch.tensor(np.stack([clean_bb.real, clean_bb.imag]), dtype=torch.float32)
+                noisy_tensor = torch.tensor(np.stack([noisy_bb.real, noisy_bb.imag]), dtype=torch.float32)
+                fd_tensor = torch.tensor(fd_hz / 1000.0, dtype=torch.float32)
+
+                noisy_list.append(noisy_tensor)
+                clean_list.append(clean_tensor)
+                fd_list.append(fd_tensor)
+
+            self.noisy = torch.stack(noisy_list)
+            self.clean = torch.stack(clean_list)
+            self.fd    = torch.stack(fd_list)
+
+            torch.save({
+                'noisy': self.noisy,
+                'clean': self.clean,
+                'fd': self.fd,
+                'scale_factor': self.scale_factor
+            }, cache_file)
+            print(f"Saved with global scaling!")
+
+        print(f"Dataset ready: {len(self)} samples (scale: {self.scale_factor:.6f})")
+
+    def __len__(self): return len(self.noisy)
+    def __getitem__(self, i): return self.noisy[i], self.clean[i], self.fd[i]
